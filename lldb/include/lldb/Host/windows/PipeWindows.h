@@ -37,6 +37,7 @@ public:
   Status CreateWithUniqueName(llvm::StringRef prefix,
                               bool child_process_inherit,
                               llvm::SmallVectorImpl<char> &name) override;
+  std::string GetPath() const override;
   Status OpenAsReader(llvm::StringRef name,
                       bool child_process_inherit) override;
   Status
@@ -79,6 +80,8 @@ private:
 
   int m_read_fd;
   int m_write_fd;
+
+  std::string m_path;
 
   OVERLAPPED m_read_overlapped;
   OVERLAPPED m_write_overlapped;

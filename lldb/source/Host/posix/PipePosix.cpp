@@ -54,20 +54,24 @@ static std::chrono::time_point<std::chrono::steady_clock> Now() {
 }
 
 PipePosix::PipePosix()
-    : m_fds{PipePosix::kInvalidDescriptor, PipePosix::kInvalidDescriptor} {}
+    : m_fds{PipePosix::kInvalidDescriptor, PipePosix::kInvalidDescriptor},
+      m_path{} {}
 
 PipePosix::PipePosix(lldb::pipe_t read, lldb::pipe_t write)
-    : m_fds{read, write} {}
+    : m_fds{read, write},
+      m_path{} {}
 
 PipePosix::PipePosix(PipePosix &&pipe_posix)
     : PipeBase{std::move(pipe_posix)},
       m_fds{pipe_posix.ReleaseReadFileDescriptor(),
-            pipe_posix.ReleaseWriteFileDescriptor()} {}
+            pipe_posix.ReleaseWriteFileDescriptor()},
+      m_path{std::move(pipe_posix.m_path)}  {}
 
 PipePosix &PipePosix::operator=(PipePosix &&pipe_posix) {
   PipeBase::operator=(std::move(pipe_posix));
   m_fds[READ] = pipe_posix.ReleaseReadFileDescriptor();
   m_fds[WRITE] = pipe_posix.ReleaseWriteFileDescriptor();
+  m_path = std::move(pipe_posix.m_path);
   return *this;
 }
 
@@ -92,6 +96,7 @@ Status PipePosix::CreateNew(bool child_processes_inherit) {
       }
     }
 #endif
+    m_path = std::string{};
     return error;
   }
 #endif
@@ -109,7 +114,9 @@ Status PipePosix::CreateNew(llvm::StringRef name, bool child_process_inherit) {
   Status error;
   if (::mkfifo(name.str().c_str(), 0660) != 0)
     error.SetErrorToErrno();
-
+  if (error.Success()) {
+    m_path = std::move(name);
+  }
   return error;
 }
 
@@ -137,6 +144,8 @@ Status PipePosix::CreateWithUniqueName(llvm::StringRef prefix,
     name = named_pipe_path;
   return error;
 }
+
+std::string PipePosix::GetPath() const { return m_path; }
 
 Status PipePosix::OpenAsReader(llvm::StringRef name,
                                bool child_process_inherit) {

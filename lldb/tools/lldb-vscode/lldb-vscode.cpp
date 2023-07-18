@@ -46,6 +46,7 @@
 #include <sstream>
 #include <thread>
 #include <vector>
+#include <iostream>
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -1576,19 +1577,23 @@ llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
   g_vsc.is_attach = true;
   lldb::SBAttachInfo attach_info;
 
-  llvm::Expected<std::shared_ptr<FifoFile>> comm_file_or_err =
-      CreateRunInTerminalCommFile();
-  if (!comm_file_or_err)
-    return comm_file_or_err.takeError();
-  FifoFile &comm_file = *comm_file_or_err.get();
+  auto fifo_file_or_err = CreateFifoFile("lldb-vscode-runinterminal-comm", "debug-adaptor");
+  if (!fifo_file_or_err)
+    return fifo_file_or_err.takeError();
+  auto fifo_file = fifo_file_or_err.get();
+  auto io = std::make_shared<FifoFileIO>(fifo_file, "debug-adaptor");
 
-  RunInTerminalDebugAdapterCommChannel comm_channel(comm_file.m_path);
+  std::cout << "[INFO -> " __FUNCSIG__ "] path: " << fifo_file->GetPath()
+            << std::endl;
+
+  RunInTerminalDebugAdapterCommChannel comm_channel(io);
 
   lldb::pid_t debugger_pid = LLDB_INVALID_PROCESS_ID;
 #if !defined(_WIN32)
   debugger_pid = getpid();
 #endif
   llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
+<<<<<<< Updated upstream
       launch_request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid);
   g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
                            [](llvm::Expected<llvm::json::Value> value) {
@@ -1599,6 +1604,16 @@ llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
                                    << llvm::toString(std::move(err)) << "\n";
                              }
                            });
+=======
+      launch_request, g_vsc.debug_adaptor_path, fifo_file->GetPath());
+  llvm::json::Object reverse_response;
+  lldb_vscode::PacketStatus status =
+      g_vsc.SendReverseRequest(reverse_request, reverse_response);
+  if (status != lldb_vscode::PacketStatus::Success)
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "Process cannot be launched by the IDE. %s",
+                                   comm_channel.GetLauncherError().c_str());
+>>>>>>> Stashed changes
 
   if (llvm::Expected<lldb::pid_t> pid = comm_channel.GetLauncherPid())
     attach_info.SetProcessID(*pid);
@@ -3301,6 +3316,7 @@ EXAMPLES:
 // In case of errors launching the target, a suitable error message will be
 // emitted to the debug adaptor.
 void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
+<<<<<<< Updated upstream
                                llvm::StringRef comm_file,
                                lldb::pid_t debugger_pid, char *argv[]) {
 #if defined(_WIN32)
@@ -3317,6 +3333,19 @@ void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
 #endif
 
   RunInTerminalLauncherCommChannel comm_channel(comm_file);
+=======
+                               llvm::StringRef comm_file, char *argv[]) {
+
+  auto fifo_file_or_err = OpenFifoFile(comm_file, "run-in-terminal launcher");
+  if (!fifo_file_or_err) {
+    llvm::errs() << fifo_file_or_err.takeError();
+    exit(EXIT_FAILURE);
+  }
+  auto fifo_file = fifo_file_or_err.get();
+  auto io = std::make_shared<FifoFileIO>(fifo_file, "run-in-terminal launcher");
+
+  RunInTerminalLauncherCommChannel comm_channel(io);
+>>>>>>> Stashed changes
   if (llvm::Error err = comm_channel.NotifyPid()) {
     llvm::errs() << llvm::toString(std::move(err)) << "\n";
     exit(EXIT_FAILURE);
@@ -3342,7 +3371,6 @@ void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
   comm_channel.NotifyError(error);
   llvm::errs() << error << "\n";
   exit(EXIT_FAILURE);
-#endif
 }
 
 /// used only by TestVSCode_redirection_to_console.py
@@ -3477,12 +3505,26 @@ int main(int argc, char *argv[]) {
     g_vsc.output.descriptor = StreamDescriptor::from_file(new_stdout_fd, false);
   }
 
+<<<<<<< Updated upstream
   bool CleanExit = true;
   if (auto Err = g_vsc.Loop()) {
     if (g_vsc.log)
       *g_vsc.log << "Transport Error: " << llvm::toString(std::move(Err))
                  << "\n";
     CleanExit = false;
+=======
+
+  while (!g_vsc.sent_terminated_event) {
+    llvm::json::Object object;
+    lldb_vscode::PacketStatus status = g_vsc.GetNextObject(object);
+    if (status == lldb_vscode::PacketStatus::EndOfFile)
+      break;
+    if (status != lldb_vscode::PacketStatus::Success)
+      return 1; // Fatal error
+
+    if (!g_vsc.HandleObject(object))
+      return 1;
+>>>>>>> Stashed changes
   }
 
   return CleanExit ? EXIT_SUCCESS : EXIT_FAILURE;

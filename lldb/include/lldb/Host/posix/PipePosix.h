@@ -37,6 +37,7 @@ public:
   Status CreateWithUniqueName(llvm::StringRef prefix,
                               bool child_process_inherit,
                               llvm::SmallVectorImpl<char> &name) override;
+  std::string GetPath() const override;
   Status OpenAsReader(llvm::StringRef name,
                       bool child_process_inherit) override;
   Status
@@ -72,6 +73,7 @@ public:
 
 private:
   int m_fds[2];
+  std::string m_path;
 };
 
 } // namespace lldb_private

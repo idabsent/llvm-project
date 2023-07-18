@@ -28,7 +28,7 @@ static constexpr llvm::StringLiteral g_pipe_name_prefix = "\\\\.\\Pipe\\";
 PipeWindows::PipeWindows()
     : m_read(INVALID_HANDLE_VALUE), m_write(INVALID_HANDLE_VALUE),
       m_read_fd(PipeWindows::kInvalidDescriptor),
-      m_write_fd(PipeWindows::kInvalidDescriptor) {
+      m_write_fd(PipeWindows::kInvalidDescriptor), m_path{} {
   ZeroMemory(&m_read_overlapped, sizeof(m_read_overlapped));
   ZeroMemory(&m_write_overlapped, sizeof(m_write_overlapped));
 }
@@ -36,7 +36,7 @@ PipeWindows::PipeWindows()
 PipeWindows::PipeWindows(pipe_t read, pipe_t write)
     : m_read((HANDLE)read), m_write((HANDLE)write),
       m_read_fd(PipeWindows::kInvalidDescriptor),
-      m_write_fd(PipeWindows::kInvalidDescriptor) {
+      m_write_fd(PipeWindows::kInvalidDescriptor), m_path{} {
   assert(read != LLDB_INVALID_PIPE || write != LLDB_INVALID_PIPE);
 
   // Don't risk in passing file descriptors and getting handles from them by
@@ -77,6 +77,8 @@ Status PipeWindows::CreateNew(bool child_process_inherit) {
 
   m_write_fd = _open_osfhandle((intptr_t)m_write, _O_WRONLY);
   ZeroMemory(&m_write_overlapped, sizeof(m_write_overlapped));
+
+  m_path = std::string{};
 
   return Status();
 }
@@ -125,6 +127,8 @@ Status PipeWindows::CreateNew(llvm::StringRef name,
     return result;
   }
 
+  m_path = std::move(pipe_path);
+
   return result;
 }
 
@@ -151,6 +155,8 @@ Status PipeWindows::CreateWithUniqueName(llvm::StringRef prefix,
     name = pipe_name;
   return error;
 }
+
+std::string PipeWindows::GetPath() const { return m_path; }
 
 Status PipeWindows::OpenAsReader(llvm::StringRef name,
                                  bool child_process_inherit) {
@@ -203,6 +209,8 @@ Status PipeWindows::OpenNamedPipe(llvm::StringRef name,
 
     ZeroMemory(&m_write_overlapped, sizeof(m_write_overlapped));
   }
+
+  m_path = std::move(pipe_path);
 
   return Status();
 }

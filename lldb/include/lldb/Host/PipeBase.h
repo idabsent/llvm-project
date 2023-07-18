@@ -28,6 +28,7 @@ public:
   virtual Status CreateWithUniqueName(llvm::StringRef prefix,
                                       bool child_process_inherit,
                                       llvm::SmallVectorImpl<char> &name) = 0;
+  virtual std::string GetPath() const = 0;
 
   virtual Status OpenAsReader(llvm::StringRef name,
                               bool child_process_inherit) = 0;
